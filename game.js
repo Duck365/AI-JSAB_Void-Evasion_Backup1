@@ -318,10 +318,32 @@ function executePhase1(t) {
 function executePhase2(t) {
     if (t === 2640) spawnWarning(canvas.width / 2, canvas.height / 2, "ring", 0, 150, 60);
     
+    // 3-Layer Burst at the exact start of Phase 2.1
+    if (t === 2700) {
+        let cx = canvas.width / 2;
+        let cy = canvas.height / 2;
+        for (let layer = 1; layer <= 3; layer++) {
+            let speed = 4 + (layer * 2); // Different speeds separate the layers
+            for (let i = 0; i < Math.PI * 2; i += Math.PI / 4) {
+                spawnProjectile(cx, cy, Math.cos(i) * speed, Math.sin(i) * speed, 18, 200, false, 'wingding');
+            }
+        }
+    }
+
     if (t > 2700 && t < 3500 && t % 2 === 0) { 
         let cx = canvas.width / 2;
         let cy = canvas.height / 2;
-        let angle = t * 0.035; 
+        let angle = 0;
+        
+        if (t > 2820) {
+            let activeTime = t - 2820;
+            if (activeTime <= 100) {
+                angle = 0.5 * (0.035 / 100) * (activeTime * activeTime);
+            } else {
+                angle = 1.75 + 0.035 * (activeTime - 100);
+            }
+        }
+
         spawnProjectile(cx, cy, Math.cos(angle)*12, Math.sin(angle)*12, 20, 150, false, 'wingding');
         spawnProjectile(cx, cy, Math.cos(angle + Math.PI/2)*12, Math.sin(angle + Math.PI/2)*12, 20, 150, false, 'wingding');
         spawnProjectile(cx, cy, Math.cos(angle + Math.PI)*12, Math.sin(angle + Math.PI)*12, 20, 150, false, 'wingding');
@@ -337,6 +359,7 @@ function executePhase2(t) {
         }
     }
 
+    // Phase 2.3 (Portal Active Time)
     if (t > 4500 && t < 5300) {
         if (t % 60 === 0) {
             let dir = Math.random() > 0.5 ? 1 : -1;
@@ -344,6 +367,8 @@ function executePhase2(t) {
             spawnWarning(startX === -50 ? 50 : canvas.width - 50, p1.y - 100, dir, "split_wall", p1.y + 100, 40);
         }
         if (t % 90 === 0) {
+            // Note: If your sniper lines automatically shoot projectiles, ensure the warning logic 
+            // inside your main code spawns 'wingding' types when coming from the center portal.
             spawnWarning(canvas.width / 2, canvas.height / 2, "sniper_line", p1.x, p1.y, 45);
             if (typeof p2 !== 'undefined' && p2.active) spawnWarning(canvas.width / 2, canvas.height / 2, "sniper_line", p2.x, p2.y, 45);
         }
@@ -363,13 +388,17 @@ function executePhase2(t) {
 }
 
 function executePhase3(t) {
-    // PHASE 3.1
     if (t > 5700 && t < 6700) {
-        if (t % 30 === 0) {
+        let isCoop = typeof p2 !== 'undefined' && p2.active;
+        
+        if (t % (isCoop ? 50 : 30) === 0) {
             spawnWarning(p1.x, p1.y, "firecracker", 0, 50, 40);
-            if (typeof p2 !== 'undefined' && p2.active) spawnWarning(p2.x, p2.y, "firecracker", 0, 50, 40);
         }
-        if (t % 10 === 0) {
+        if (isCoop && (t + 25) % 50 === 0) {
+            spawnWarning(p2.x, p2.y, "firecracker", 0, 50, 40);
+        }
+        
+        if (t % (isCoop ? 20 : 10) === 0) {
             spawnProjectile(Math.random() * canvas.width, -20, 0, 8, 12, 150, false, 'wingding');
         }
     }
@@ -378,13 +407,11 @@ function executePhase3(t) {
     
     if (t === 6790) { projectiles = []; warnings = []; }
 
-    // PHASE 3.2
     if (t > 6800 && t < 7800) {
         if (t % 90 === 0) {
             spawnWarning(50, 50, "sniper_line", p1.x, p1.y, 60);
             spawnWarning(canvas.width - 50, canvas.height - 50, "sniper_line", p1.x, p1.y, 60);
             if (typeof p2 !== 'undefined' && p2.active) {
-                // Cross-map snipers for P2 to keep pressure balanced
                 spawnWarning(50, canvas.height - 50, "sniper_line", p2.x, p2.y, 60);
                 spawnWarning(canvas.width - 50, 50, "sniper_line", p2.x, p2.y, 60);
             }
@@ -404,16 +431,17 @@ function executePhase3(t) {
 
     if (t === 7850) { projectiles = []; warnings = []; }
 
-    // PHASE 3.3
     if (t > 7900 && t < 8900) {
         if (t % 90 === 0) {
             spawnWarning(150, 150, "ring", 0, 80, 45);
             spawnWarning(canvas.width - 150, canvas.height - 150, "ring", 0, 80, 45);
         }
         if (t % 60 === 0) {
-            spawnWarning(canvas.width / 2, 50, "sniper_line", p1.x, p1.y, 40);
+            // Player 1 targeted from the top
+            spawnWarning(canvas.width / 2, 0, "sniper_line", p1.x, p1.y, 40);
+            // Player 2 also targeted from the absolute top (y = 0)
             if (typeof p2 !== 'undefined' && p2.active) {
-                spawnWarning(canvas.width / 2, canvas.height - 50, "sniper_line", p2.x, p2.y, 40);
+                spawnWarning(canvas.width / 2, 0, "sniper_line", p2.x, p2.y, 40);
             }
         }
         if (t % 15 === 0) {
@@ -672,6 +700,42 @@ function draw() {
             ctx.fillStyle = `rgba(128, 0, 128, ${opacity * 0.2})`; ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill();
         }
     }
+
+    // --- NEW PORTAL BLOCK ADDED HERE ---
+    // Phase 2.3 Center Portal (renders behind players and warnings)
+    if (frameCount > 4500 && frameCount < 5300) {
+        let cx = canvas.width / 2;
+        let cy = canvas.height / 2;
+        let pulse = Math.sin(frameCount * 0.05) * 10;
+        let rotation = frameCount * 0.02;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rotation);
+        
+        // Inner void
+        ctx.beginPath();
+        ctx.arc(0, 0, 40 + pulse, 0, Math.PI * 2);
+        ctx.fillStyle = '#050011'; 
+        ctx.fill();
+        
+        // Outer glowing ring
+        ctx.lineWidth = 4 + (pulse * 0.2);
+        ctx.strokeStyle = '#B200FF';
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#B200FF';
+        ctx.stroke();
+        
+        // Secondary rotating dashed ring
+        ctx.beginPath();
+        ctx.setLineDash([15, 10]);
+        ctx.arc(0, 0, 55 + (pulse * 0.5), 0, Math.PI * 2);
+        ctx.strokeStyle = '#7A00B2';
+        ctx.stroke();
+        
+        ctx.restore();
+    }
+    // -----------------------------------
 
     drawPlayer(p1);
     if (gameMode === 'multiplayer') drawPlayer(p2);
