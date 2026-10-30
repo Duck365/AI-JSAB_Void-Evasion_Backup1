@@ -289,27 +289,36 @@ function executePhase1(t) {
             spawnProjectile(spawnX, spawnY, (Math.random()-0.5)*10, (Math.random()-0.5)*10, 20, 400, true);
         }
     }
-
-    // TRANSITION 1
+    
+    // TRANSITION 1: THE ROTATING GAUNTLET (4-WAY WITH WARNING)
     if (t === 2350) { projectiles = []; warnings = []; }
-    
-    if (t === 2360) {
-        // Warning added right before the attack starts at 2400
-        spawnWarning(canvas.width / 2, canvas.height / 2, "ring", 0, 100, 40);
-    }
-    
-    if (t > 2400 && t < 2600) {
-        if (t % 60 === 0) {
-            let dx1 = p1.x - (canvas.width / 2);
-            let dy1 = p1.y - (canvas.height / 2);
-            let dist1 = Math.hypot(dx1, dy1) || 1;
-            spawnProjectile(canvas.width / 2, canvas.height / 2, (dx1/dist1)*3.5, (dy1/dist1)*3.5, 45, 300, true, 'wingding');
-            
-            if (typeof p2 !== 'undefined' && p2.active) {
-                let dx2 = p2.x - (canvas.width / 2);
-                let dy2 = p2.y - (canvas.height / 2);
-                let dist2 = Math.hypot(dx2, dy2) || 1;
-                spawnProjectile(canvas.width / 2, canvas.height / 2, (dx2/dist2)*3.5, (dy2/dist2)*3.5, 45, 300, true, 'wingding');
+
+    if (t >= 2360 && t < 2600) {
+        // Warning phase: Telegraph the starting position of the cross for 40 frames
+        if (t === 2360) {
+            spawnWarning(canvas.width / 2, 0, "grid_laser_v", 0, 0, 40);
+            spawnWarning(0, canvas.height / 2, "grid_laser_h", 0, 0, 40);
+            spawnWarning(canvas.width / 2, canvas.height / 2, "spinner_warn", 0, 100, 40);
+        }
+
+        // Action phase: The rotating gauntlet begins at t=2400
+        if (t >= 2400) {
+            if (t % 2 === 0) {
+                let angle = (t - 2400) * (Math.PI / 120); // Steady rotation
+                
+                for (let i = 0; i < 4; i++) {
+                    let armAngle = angle + (i * Math.PI / 2);
+                    
+                    for (let r = 20; r < 1200; r += 20) {
+                        // Line 1 (Arms 0 and 2): Single gap further out
+                        if ((i === 0 || i === 2) && (r > 280 && r < 380)) continue; 
+                        
+                        // Line 2 (Arms 1 and 3): Two gaps! One close, one very far out for wide screens
+                        if ((i === 1 || i === 3) && ((r > 120 && r < 220) || (r > 600 && r < 700))) continue; 
+
+                        spawnProjectile(canvas.width/2 + Math.cos(armAngle)*r, canvas.height/2 + Math.sin(armAngle)*r, 0, 0, 18, 4, false, 'wingding');
+                    }
+                }
             }
         }
     }
@@ -376,13 +385,26 @@ function executePhase2(t) {
 
     if (t === 5350) { projectiles = []; warnings = []; }
     
-    if (t > 5400 && t < 5600) {
-        if (t % 40 === 0) {
-            let offset = (t - 5400) / 2;
-            spawnWarning(offset, 0, "grid_laser_v", 0, 0, 40);
-            spawnWarning(canvas.width - offset, 0, "grid_laser_v", 0, 0, 40);
-            spawnWarning(0, offset, "grid_laser_h", 0, 0, 40);
-            spawnWarning(0, canvas.height - offset, "grid_laser_h", 0, 0, 40);
+    // TRANSITION 2: THE SINGLE PENDULUM SWEEP
+    if (t > 5400 && t < 5650) {
+        // Only sweep between 5400 and 5600 to allow a 50 frame cooldown at the end
+        if (t >= 5400 && t <= 5600) {
+            
+            // Pendulum drops slow bombs along its path occasionally
+            if (t % 30 === 0) {
+                let futureT = t + 40; 
+                let sweepX = (futureT - 5400) * (canvas.width / 200);
+                spawnWarning(sweepX, 100, "ring", 0, 150, 40); 
+            }
+
+            // The single massive vertical laser sweep from Left to Right
+            if (t % 3 === 0) {
+                let futureT = t + 40; // Look 40 frames into the future for the warning
+                let sweepX = (futureT - 5400) * (canvas.width / 200); // Crosses the screen once over 200 frames
+                
+                // Spawn a warning that stays on screen for 40 frames before firing
+                spawnWarning(sweepX, 0, "grid_laser_v", 0, 0, 40); 
+            }
         }
     }
 }
@@ -402,8 +424,6 @@ function executePhase3(t) {
             spawnProjectile(Math.random() * canvas.width, -20, 0, 8, 12, 150, false, 'wingding');
         }
     }
-
-    if (t === 6740) spawnWarning(canvas.width / 2, canvas.height / 2, "middle_line", 0, 40, 60);
     
     if (t === 6790) { projectiles = []; warnings = []; }
 
@@ -472,10 +492,6 @@ function executeAttacks() {
 
     if (gameMode === 'full' || gameMode === 'multiplayer') {
         if (t === 5400) { projectiles = []; warnings = []; }
-        if (t === 5460) {
-            for(let x = 100; x < canvas.width; x += 150) spawnWarning(x, 0, "grid_laser_v", 0, 0, 90); 
-            for(let y = 100; y < canvas.height; y += 150) spawnWarning(0, y, "grid_laser_h", 0, 0, 90); 
-        }
     }
 
     if (gameMode === 'full' || gameMode === 'multiplayer' || (gameMode === 'practice' && majorPhase === '3')) executePhase3(t);
@@ -608,13 +624,21 @@ function update() {
         p.life--;
 
         if (p.isBouncy) {
-            if (p.x - p.size/2 < 0) { p.x = p.size/2; p.vx *= -1; }
-            if (p.x + p.size/2 > canvas.width) { p.x = canvas.width - p.size/2; p.vx *= -1; }
-            if (p.y - p.size/2 < 0) { p.y = p.size/2; p.vy *= -1; }
-            if (p.y + p.size/2 > canvas.height) { p.y = canvas.height - p.size/2; p.vy *= -1; }
-        } else {
-            if (p.x < -100 || p.x > canvas.width + 100 || p.y < -100 || p.y > canvas.height + 100) {
-                projectiles.splice(i, 1); continue;
+            let bounced = false;
+            if (p.x - p.size/2 < 0) { p.x = p.size/2; p.vx *= -1; bounced = true; }
+            if (p.x + p.size/2 > canvas.width) { p.x = canvas.width - p.size/2; p.vx *= -1; bounced = true; }
+            if (p.y - p.size/2 < 0) { p.y = p.size/2; p.vy *= -1; bounced = true; }
+            if (p.y + p.size/2 > canvas.height) { p.y = canvas.height - p.size/2; p.vy *= -1; bounced = true; }
+
+            if (bounced) {
+                let angle = Math.atan2(p.vy, p.vx);
+                let speed = 6;
+                // Middle leg
+                spawnProjectile(p.x, p.y, Math.cos(angle)*speed, Math.sin(angle)*speed, 14, 150, false, 'wingding');
+                // Side leg 1 (+45 degrees)
+                spawnProjectile(p.x, p.y, Math.cos(angle + Math.PI/4)*speed, Math.sin(angle + Math.PI/4)*speed, 14, 150, false, 'wingding');
+                // Side leg 2 (-45 degrees)
+                spawnProjectile(p.x, p.y, Math.cos(angle - Math.PI/4)*speed, Math.sin(angle - Math.PI/4)*speed, 14, 150, false, 'wingding');
             }
         }
 
@@ -926,14 +950,36 @@ function gameWon() {
     gameActive = false; cancelAnimationFrame(animationId);
     let challengeText = challengeMode !== 'none' ? ` Challenge - ${challengeMode.charAt(0).toUpperCase() + challengeMode.slice(1)}` : '';
 
+    // Safely calculate the precise Remaining HP format based on hits taken
+    let hpText = "";
+    if (!isMagneticMode && gameMode !== 'multiplayer') {
+        let maxHpMap = { 'Easy': 10, 'Normal': 8, 'Hard': 5, 'Hardcore': 1 };
+        let maxHp = maxHpMap[currentDifficulty];
+        
+        if (maxHp !== undefined) {
+            let hits = (typeof p1 !== 'undefined' && typeof p1.hitsTaken !== 'undefined') ? p1.hitsTaken : 0;
+            let currentHp = Math.max(0, maxHp - hits);
+            hpText = ` | Remaining HP: ${currentHp}/${maxHp}`;
+        }
+    }
+
     if (gameMode === 'practice') {
         document.getElementById('victory-title').innerText = "PHASE CLEARED";
-        document.getElementById('victory-stats-mode').innerText = `Phase ${selectedPracticePhase} Practice${challengeText}, ${currentDifficulty}`;
+        let baseText = `Phase ${selectedPracticePhase} Practice${challengeText}, ${currentDifficulty}`;
+        
+        // Only append HP remaining if it's a full phase (e.g. '1' instead of '1.1')
+        if (!selectedPracticePhase.includes('.')) {
+            baseText += hpText;
+        }
+        
+        document.getElementById('victory-stats-mode').innerText = baseText;
     } else {
         document.getElementById('victory-title').innerText = "FULL FIGHT CLEARED";
         let modeLabel = isMagneticMode ? 'Magnetic Mode' : (gameMode === 'multiplayer' ? 'Multiplayer' : 'Full Fight');
-        document.getElementById('victory-stats-mode').innerText = `${modeLabel}${challengeText}, ${currentDifficulty}`;
+        
+        document.getElementById('victory-stats-mode').innerText = `${modeLabel}${challengeText}, ${currentDifficulty}${hpText}`;
     }
+    
     if (currentDifficulty === 'Debug') {
         document.getElementById('debug-hits-display').style.display = 'block';
         if (gameMode === 'multiplayer') {
