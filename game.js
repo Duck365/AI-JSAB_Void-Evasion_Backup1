@@ -1167,16 +1167,8 @@ function gameWon() {
     // Safely calculate Remaining HP format based on hits taken and starting max HP
     let hpText = "";
     if (!isMagneticMode && gameMode !== 'multiplayer') {
-        let maxHpMap = { 'Easy': 10, 'Normal': 8, 'Hard': 5, 'Hardcore': 1 };
-        let maxHp = maxHpMap[currentDifficulty];
-        
-        // FOOLPROOF CUSTOM HP CHECK: Pull directly from the Custom HP input box!
-        if (maxHp === undefined && currentDifficulty.includes('Custom')) {
-            let customVal = parseInt(document.getElementById('custom-hp-input').value);
-            if (!isNaN(customVal) && customVal > 0) {
-                maxHp = customVal;
-            }
-        }
+        // Replaced the hardcoded map and custom check with the global HP variable
+        let maxHp = currentHpSetting; 
         
         if (maxHp !== undefined && !isNaN(maxHp) && maxHp > 0) {
             let hits = (typeof p1 !== 'undefined' && typeof p1.hitsTaken !== 'undefined') ? p1.hitsTaken : 0;
